@@ -296,7 +296,236 @@ print(df[["idade","glicose","pressao_arterial","imc","colesterol"]]
       .describe().round(1).to_string())
 print("\n" + "=" * 58)
 
-
 ============================================================
 
+#Codigo 3
+
+# ============================================================
+# SISTEMA DE PREDIÇÃO DE RISCO CLÍNICO — GOOGLE COLAB
+# ============================================================
+# Cole este código em uma célula e execute com Ctrl+Enter
+# ============================================================
+
+# ── Instalação das dependências (já disponíveis no Colab) ──
+# !pip install pandas numpy scikit-learn  # descomente se necessário
+
+import pandas as pd
+import numpy as np
+import warnings
+warnings.filterwarnings("ignore")
+
+from sklearn.model_selection import train_test_split, cross_val_score
+from sklearn.preprocessing import StandardScaler
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
+
+# ============================================================
+# ETAPA 1 — GERAÇÃO DO DATASET SINTÉTICO (2000 registros)
+# ============================================================
+print("=" * 60)
+print("  ETAPA 1 — GERAÇÃO DO DATASET SINTÉTICO")
+print("=" * 60)
+
+np.random.seed(42)
+N = 2000
+
+NOMES = [
+    "Ana", "Bruno", "Carla", "Diego", "Elena", "Fábio", "Gisele", "Hugo",
+    "Íris", "Jonas", "Karen", "Lucas", "Marta", "Neto", "Olga", "Paulo",
+    "Quésia", "Rafael", "Sara", "Tiago", "Ursula", "Vitor", "Wanda", "Xande",
+    "Yara", "Zeca", "Aline", "Beto", "Cíntia", "Davi", "Estela", "Felipe",
+    "Graça", "Hélio", "Ingrid", "Jorge", "Lúcia", "Marcos", "Nina", "Oscar",
+    "Patrícia", "Quirino", "Renata", "Sérgio", "Tânia", "Ulisses", "Vera",
+    "Wagner", "Ximena", "Zilda", "Adão", "Beatriz", "César", "Dalva", "Éder",
+    "Flávia", "Gilson", "Helena", "Ivan", "Joana", "Kléber", "Larissa",
+    "Milton", "Nadir", "Odete", "Pedro", "Quitéria", "Rodrigo", "Simone",
+    "Tadeu", "Umberto", "Valéria", "Wendell", "Xerxes", "Yasmin", "Zuleica"
+]
+
+nomes            = np.random.choice(NOMES, size=N, replace=True)
+idade            = np.clip(np.random.normal(45, 18, N).astype(int), 18, 99)
+glicose          = np.clip(np.random.lognormal(4.7, 0.18, N).round(1), 60, 400)
+pressao_arterial = np.clip(np.random.normal(120, 18, N).round(1), 80, 220)
+imc              = np.clip(np.round(np.random.normal(26.5, 5.5, N), 1), 14.0, 55.0)
+colesterol       = np.clip(np.random.normal(210, 40, N).round(1), 100, 400)
+
+def pts_glicose(g):   return np.where(g < 100, 0, np.where(g < 126, 1, 2))
+def pts_pressao(p):   return np.where(p < 130, 0, np.where(p < 160, 1, 2))
+def pts_imc(i):       return np.where(i < 25,  0, np.where(i < 30,  1, 2))
+def pts_colesterol(c):return np.where(c < 200, 0, np.where(c < 240, 1, 2))
+def pts_idade(a):     return np.where(a < 35,  0, np.where(a < 55,  1, 2))
+
+score = (pts_glicose(glicose) + pts_pressao(pressao_arterial) +
+         pts_imc(imc) + pts_colesterol(colesterol) + pts_idade(idade))
+score = np.clip(score + np.random.choice([-1, 0, 0, 1], size=N), 0, 10)
+risco = np.where(score <= 3, 0, np.where(score <= 6, 1, 2))
+
+df = pd.DataFrame({
+    "nome": nomes, "idade": idade, "glicose": glicose,
+    "pressao_arterial": pressao_arterial, "imc": imc,
+    "colesterol": colesterol, "risco": risco
+})
+
+print(f"\n✓ Dataset gerado: {len(df)} registros")
+print(df.head())
+dist = df["risco"].value_counts().sort_index()
+labels_dist = {0: "Baixo", 1: "Médio", 2: "Alto"}
+print("\nDistribuição do risco:")
+for k, v in dist.items():
+    print(f"  Risco {k} ({labels_dist[k]:>5}): {v} registros ({v/N*100:.1f}%)")
+
+
+# ============================================================
+# ETAPA 2 — LIMPEZA E VALIDAÇÃO (Aula 09)
+# ============================================================
+print(f"\n{'=' * 60}")
+print("  ETAPA 2 — LIMPEZA E VALIDAÇÃO DO DATASET")
+print("=" * 60)
+
+COLUNAS_CR = ["glicose", "pressao_arterial", "imc"]
+df_corrigido = df.copy()
+
+print("\n--- VERIFICAÇÃO DE VALORES INVÁLIDOS ---")
+for col in COLUNAS_CR:
+    zeros = (df_corrigido[col] == 0).sum()
+    nulos = df_corrigido[col].isnull().sum()
+    mediana = df_corrigido[col].replace(0, np.nan).median()
+    df_corrigido[col] = df_corrigido[col].replace(0, np.nan).fillna(mediana)
+    print(f"  {col:<20}: {zeros} zeros | {nulos} nulos | mediana={mediana:.2f}")
+
+print("\n✓ Dataset validado e corrigido.\n")
+
+print("🔹 TOP 10 — MAIOR GLICOSE:")
+top_g = df_corrigido[["nome","glicose"]].sort_values("glicose", ascending=False).head(10).reset_index(drop=True)
+top_g.index += 1
+print(top_g.to_string())
+
+print("\n🔹 TOP 10 — MAIOR COLESTEROL:")
+top_c = df_corrigido[["nome","colesterol"]].sort_values("colesterol", ascending=False).head(10).reset_index(drop=True)
+top_c.index += 1
+print(top_c.to_string())
+
+
+# ============================================================
+# ETAPA 3 — PRÉ-PROCESSAMENTO E TREINAMENTO
+# ============================================================
+print(f"\n{'=' * 60}")
+print("  ETAPA 3 — PRÉ-PROCESSAMENTO E TREINAMENTO")
+print("=" * 60)
+
+SEED     = 42
+FEATURES = ["idade", "glicose", "pressao_arterial", "imc", "colesterol"]
+ALVO     = "risco"
+
+X = df_corrigido[FEATURES].values
+y = df_corrigido[ALVO].values
+
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y, test_size=0.20, random_state=SEED, stratify=y
+)
+print(f"\n  Split → Treino: {len(X_train)} | Teste: {len(X_test)}")
+
+scaler     = StandardScaler()
+X_train_sc = scaler.fit_transform(X_train)
+X_test_sc  = scaler.transform(X_test)
+print("  ✓ Escalonamento aplicado (StandardScaler)")
+
+modelo = RandomForestClassifier(n_estimators=150, max_depth=8,
+                                 random_state=SEED, n_jobs=-1)
+modelo.fit(X_train_sc, y_train)
+print("  ✓ Random Forest treinado (150 árvores, profundidade máx. 8)")
+
+cv = cross_val_score(modelo, X_train_sc, y_train, cv=5, scoring="accuracy")
+print(f"  ✓ Validação cruzada 5-fold: {cv.mean()*100:.2f}% ± {cv.std()*100:.2f}%")
+
+
+# ============================================================
+# ETAPA 4 — AVALIAÇÃO DO MODELO
+# ============================================================
+print(f"\n{'=' * 60}")
+print("  ETAPA 4 — AVALIAÇÃO DO MODELO")
+print("=" * 60)
+
+y_pred = modelo.predict(X_test_sc)
+print(f"\n  Acurácia Treino : {accuracy_score(y_train, modelo.predict(X_train_sc))*100:.2f}%")
+print(f"  Acurácia Teste  : {accuracy_score(y_test, y_pred)*100:.2f}%")
+
+print("\n── Relatório de Classificação ──")
+print(classification_report(y_test, y_pred, target_names=["Baixo", "Médio", "Alto"]))
+
+print("── Importância das Variáveis ──")
+imp = sorted(zip(FEATURES, modelo.feature_importances_), key=lambda x: x[1], reverse=True)
+for feat, val in imp:
+    barra = "█" * int(val * 50)
+    print(f"  {feat:<20}: {val:.4f}  {barra}")
+
+
+# ============================================================
+# ETAPA 5 — FUNÇÃO DE PREDIÇÃO INTERATIVA
+# ============================================================
+LABELS = {0: "🟢 BAIXO RISCO", 1: "🟡 RISCO MÉDIO", 2: "🔴 RISCO ALTO"}
+
+def alertas_clinicos(glicose, pressao, imc, colesterol):
+    alertas = []
+    if glicose >= 126:   alertas.append("⚠  Glicose diabética (≥ 126 mg/dL)")
+    elif glicose >= 100: alertas.append("⚠  Glicose pré-diabética (100–125 mg/dL)")
+    if pressao >= 160:   alertas.append("⚠  Hipertensão estágio 2 (≥ 160 mmHg)")
+    elif pressao >= 130: alertas.append("⚠  Hipertensão estágio 1 (130–159 mmHg)")
+    if imc >= 30:        alertas.append(f"⚠  Obesidade (IMC {imc:.1f} ≥ 30)")
+    elif imc >= 25:      alertas.append(f"⚠  Sobrepeso (IMC {imc:.1f} entre 25–29.9)")
+    if colesterol >= 240:  alertas.append("⚠  Colesterol alto (≥ 240 mg/dL)")
+    elif colesterol >= 200:alertas.append("⚠  Colesterol limítrofe (200–239 mg/dL)")
+    return alertas
+
+def prever_paciente(nome, idade, glicose, pressao, imc, colesterol):
+    x      = np.array([[idade, glicose, pressao, imc, colesterol]], dtype=float)
+    x_sc   = scaler.transform(x)
+    classe = int(modelo.predict(x_sc)[0])
+    probs  = modelo.predict_proba(x_sc)[0]
+
+    print("\n" + "═" * 60)
+    print(f"  RESULTADO")
+    print("═" * 60)
+    print(f"  Paciente         : {nome}")
+    print(f"  Idade            : {idade} anos")
+    print(f"  Glicose          : {glicose} mg/dL")
+    print(f"  Pressão Arterial : {pressao} mmHg")
+    print(f"  IMC              : {imc} kg/m²")
+    print(f"  Colesterol       : {colesterol} mg/dL")
+    print("─" * 60)
+    print(f"\n  ► RISCO PREVISTO : {LABELS[classe]}")
+    print(f"\n  Probabilidades:")
+    for i, lbl in enumerate(["Baixo", "Médio", "Alto "]):
+        barra = "█" * int(probs[i] * 30)
+        print(f"    {lbl} : {probs[i]*100:5.1f}%  {barra}")
+    al = alertas_clinicos(glicose, pressao, imc, colesterol)
+    if al:
+        print("\n  Alertas Clínicos:")
+        for a in al: print(f"    {a}")
+    else:
+        print("\n  ✓ Nenhum alerta clínico.")
+    print("═" * 60)
+
+
+# ============================================================
+# ETAPA 6 — 3 TESTES INTERATIVOS
+# ============================================================
+print(f"\n{'=' * 60}")
+print("  ETAPA 6 — TESTES INTERATIVOS (3 pacientes)")
+print("=" * 60)
+
+for i in range(1, 4):
+    print(f"\n── Dados do Paciente {i} de 3 ──")
+    nome      = input("  Nome                  : ").strip() or f"Paciente {i}"
+    idade_p   = int(input("  Idade (18–99)         : "))
+    glicose_p = float(input("  Glicose (mg/dL)       : "))
+    pressao_p = float(input("  Pressão arterial (mmHg): "))
+    imc_p     = float(input("  IMC (kg/m²)           : "))
+    colest_p  = float(input("  Colesterol (mg/dL)    : "))
+
+    prever_paciente(nome, idade_p, glicose_p, pressao_p, imc_p, colest_p)
+
+print(f"\n{'=' * 60}")
+print("  ✓ SISTEMA CONCLUÍDO — 3 testes realizados!")
+print("=" * 60)
 
