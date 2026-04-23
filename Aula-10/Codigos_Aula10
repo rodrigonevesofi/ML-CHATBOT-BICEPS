@@ -1,0 +1,524 @@
+#CODIGO1
+
+"""
+=============================================================
+PROJETO: Sistema de Predição de Risco Clínico
+ARQUIVO: 03_testes_interativos.py
+DESCRIÇÃO: Retreina o modelo com pacientes.csv e executa
+           3 testes consecutivos inserindo dados em tela.
+=============================================================
+"""
+
+import numpy  as np
+import pandas as pd
+import warnings
+warnings.filterwarnings("ignore")
+
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing   import StandardScaler
+from sklearn.ensemble        import RandomForestClassifier
+
+# ─────────────────────────────────────────────
+# BLOCO 1 – TREINAR O MODELO (com pacientes.csv)
+# ─────────────────────────────────────────────
+print("\n" + "═"*58)
+print("  CARREGANDO E TREINANDO MODELO COM pacientes.csv")
+print("═"*58)
+
+df = pd.read_csv("pacientes.csv")
+
+FEATURES = ["idade", "glicose", "pressao_arterial", "imc", "colesterol"]
+X = df[FEATURES]
+y = df["risco"]
+
+X_treino, X_teste, y_treino, y_teste = train_test_split(
+    X, y, test_size=0.20, random_state=42, stratify=y
+)
+
+scaler = StandardScaler()
+X_treino_norm = scaler.fit_transform(X_treino)
+X_teste_norm  = scaler.transform(X_teste)
+
+modelo = RandomForestClassifier(n_estimators=100, random_state=42, n_jobs=-1)
+modelo.fit(X_treino_norm, y_treino)
+
+acuracia = modelo.score(X_teste_norm, y_teste)
+print(f"✅ Modelo treinado! Acurácia no teste: {acuracia:.2%}")
+print(f"   Dataset: {len(df)} pacientes | Treino: {len(X_treino)} | Teste: {len(X_teste)}")
+
+# ─────────────────────────────────────────────
+# BLOCO 2 – FUNÇÃO DE PREDIÇÃO
+# ─────────────────────────────────────────────
+ROTULOS  = {0: "BAIXO RISCO 🟢", 1: "RISCO MÉDIO 🟡", 2: "RISCO ALTO 🔴"}
+ICONES   = {0: "🟢", 1: "🟡", 2: "🔴"}
+RECOMEND = {
+    0: "Manter hábitos saudáveis. Retorno anual.",
+    1: "Investigar fatores alterados. Consulta em 6 meses.",
+    2: "⚠️  Encaminhamento IMEDIATO a especialista.",
+}
+
+def prever_paciente(nome, idade, glicose, pressao, imc, colesterol, numero_teste):
+    """Normaliza os dados e retorna a predição com probabilidades."""
+    dados = pd.DataFrame([{
+        "idade": idade, "glicose": glicose,
+        "pressao_arterial": pressao, "imc": imc, "colesterol": colesterol
+    }])
+    dados_norm   = scaler.transform(dados)
+    classe       = modelo.predict(dados_norm)[0]
+    probs        = modelo.predict_proba(dados_norm)[0]
+
+    print("\n" + "╔" + "═"*54 + "╗")
+    print(f"║  TESTE {numero_teste} – RESULTADO DA PREDIÇÃO" + " "*25 + "║")
+    print("╠" + "═"*54 + "╣")
+    print(f"║  Paciente      : {nome:<37}║")
+    print(f"║  Idade         : {str(idade) + ' anos':<37}║")
+    print(f"║  Glicose       : {str(glicose) + ' mg/dL':<37}║")
+    print(f"║  Pressão Art.  : {str(pressao) + ' mmHg':<37}║")
+    print(f"║  IMC           : {str(imc) + ' kg/m²':<37}║")
+    print(f"║  Colesterol    : {str(colesterol) + ' mg/dL':<37}║")
+    print("╠" + "═"*54 + "╣")
+    print(f"║  DIAGNÓSTICO   : {ROTULOS[classe]:<36}║")
+    print("╠" + "═"*54 + "╣")
+    print(f"║  Probabilidade Baixo Risco : {probs[0]*100:>5.1f}%              ║")
+    print(f"║  Probabilidade Risco Médio : {probs[1]*100:>5.1f}%              ║")
+    print(f"║  Probabilidade Risco Alto  : {probs[2]*100:>5.1f}%              ║")
+    print("╠" + "═"*54 + "╣")
+    rec = RECOMEND[classe]
+    # quebra a recomendação em linha de até 52 chars
+    while len(rec) > 52:
+        corte = rec[:52].rfind(" ")
+        print(f"║  {rec[:corte]:<52}║")
+        rec = rec[corte+1:]
+    print(f"║  {rec:<52}║")
+    print("╚" + "═"*54 + "╝")
+
+# ─────────────────────────────────────────────
+# BLOCO 3 – FUNÇÃO DE ENTRADA EM TELA
+# ─────────────────────────────────────────────
+def ler_dados_paciente(numero_teste):
+    """Lê os dados do paciente via input() em tela."""
+    print("\n" + "─"*58)
+    print(f"  📋 TESTE {numero_teste} – INSERÇÃO DE DADOS DO PACIENTE")
+    print("─"*58)
+    print("  Informe os dados clínicos do paciente:\n")
+
+    nome      = input("  Nome do paciente          : ").strip()
+    idade     = int(input("  Idade (18–99 anos)        : "))
+    glicose   = float(input("  Glicose (mg/dL)           : "))
+    pressao   = float(input("  Pressão arterial (mmHg)   : "))
+    imc       = float(input("  IMC (kg/m²)               : "))
+    colesterol= float(input("  Colesterol total (mg/dL)  : "))
+
+    return nome, idade, glicose, pressao, imc, colesterol
+
+# ─────────────────────────────────────────────
+# BLOCO 4 – 3 TESTES CONSECUTIVOS
+# ─────────────────────────────────────────────
+print("\n" + "═"*58)
+print("  INICIANDO 3 TESTES COM INSERÇÃO DE DADOS EM TELA")
+print("═"*58)
+
+for i in range(1, 4):
+    nome, idade, glicose, pressao, imc, colesterol = ler_dados_paciente(i)
+    prever_paciente(nome, idade, glicose, pressao, imc, colesterol, i)
+    if i < 3:
+        input("\n  ↩  Pressione ENTER para o próximo paciente...")
+
+print("\n" + "═"*58)
+print("  3 TESTES CONCLUÍDOS COM SUCESSO!")
+print("═"*58 + "\n")
+
+
+
+
+
+
+
+============================================================
+
+#CODIGO2
+
+# ============================================================
+#  BLOCO 1 — GERADOR DE DATASET SINTÉTICO
+#  Sistema de Predição de Risco Clínico
+#  Laboratório de Machine Learning Aplicado à Saúde
+# ============================================================
+# Objetivo: gerar 2.000 registros fictícios de pacientes com
+# variáveis biomédicas realistas e uma variável-alvo de risco
+# calculada por regras clínicas coerentes.
+# ============================================================
+
+# --- Importação das bibliotecas ---
+import numpy as np          # Operações numéricas e geração de números aleatórios
+import pandas as pd         # Manipulação e exportação do dataset
+
+# --- Semente aleatória para reprodutibilidade ---
+# Garante que os mesmos dados são gerados toda vez que o script roda.
+np.random.seed(42)
+
+# --- Número de registros ---
+N = 2000
+
+# ─────────────────────────────────────────────────────────────
+# SEÇÃO 1 — NOMES FICTÍCIOS
+# Usamos listas de nomes comuns sem sobrenomes para manter
+# o dataset simples e livre de dados identificáveis reais.
+# ─────────────────────────────────────────────────────────────
+nomes_masculinos = [
+    "Lucas", "Gabriel", "Mateus", "Pedro", "Rafael", "Bruno", "Caio",
+    "Diego", "Eduardo", "Felipe", "Gustavo", "Henrique", "Igor", "João",
+    "Leandro", "Marcos", "Nathan", "Otávio", "Paulo", "Ricardo", "Sandro",
+    "Thiago", "Vinícius", "Wagner", "André", "Carlos", "Daniel", "Fábio",
+    "Gilberto", "Hélio", "Ivan", "Jorge", "Leonardo", "Murilo", "Renato",
+    "Sérgio", "Tiago", "Valter", "Wilson", "Antônio"
+]
+
+nomes_femininos = [
+    "Ana", "Beatriz", "Camila", "Diana", "Eduarda", "Fernanda", "Gabriela",
+    "Helena", "Isabela", "Juliana", "Karina", "Larissa", "Mariana", "Natália",
+    "Olivia", "Patrícia", "Roberta", "Sabrina", "Tatiana", "Vanessa",
+    "Alice", "Brenda", "Cecília", "Débora", "Elaine", "Flávia", "Giovana",
+    "Ingrid", "Joana", "Karen", "Letícia", "Mônica", "Paula", "Raquel",
+    "Simone", "Tereza", "Valéria", "Aline", "Bianca", "Yasmin"
+]
+
+# Combina os dois grupos e sorteia aleatoriamente para N registros
+todos_nomes = nomes_masculinos + nomes_femininos
+nomes = np.random.choice(todos_nomes, size=N)
+
+# ─────────────────────────────────────────────────────────────
+# SEÇÃO 2 — VARIÁVEL: IDADE
+# Distribuição uniforme entre 18 e 99 anos (adultos).
+# ─────────────────────────────────────────────────────────────
+idade = np.random.randint(18, 100, size=N)
+
+# ─────────────────────────────────────────────────────────────
+# SEÇÃO 3 — VARIÁVEIS BIOMÉDICAS
+# Cada variável é gerada com distribuição normal (curva de sino)
+# com média e desvio padrão baseados em referências clínicas.
+# np.clip() garante que valores fora de faixas plausíveis sejam
+# truncados, evitando absurdos como glicose negativa.
+# ─────────────────────────────────────────────────────────────
+
+# Glicose em jejum (mg/dL)
+# Referência: Normal = 70–99 | Pré-diabetes = 100–125 | Diabetes ≥ 126
+glicose = np.clip(
+    np.random.normal(loc=100, scale=30, size=N),
+    60, 300                      # limites mínimo e máximo realistas
+).round(1)
+
+# Pressão arterial sistólica (mmHg)
+# Referência: Normal < 120 | Elevada = 120–139 | Hipertensão ≥ 140
+pressao_arterial = np.clip(
+    np.random.normal(loc=120, scale=20, size=N),
+    80, 220
+).round(1)
+
+# Índice de Massa Corporal — IMC (kg/m²)
+# Referência: Baixo peso < 18.5 | Normal = 18.5–24.9 | Sobrepeso = 25–29.9 | Obeso ≥ 30
+imc = np.clip(
+    np.random.normal(loc=26, scale=5, size=N),
+    15, 50
+).round(1)
+
+# Colesterol total (mg/dL)
+# Referência: Desejável < 200 | Limítrofe = 200–239 | Alto ≥ 240
+colesterol = np.clip(
+    np.random.normal(loc=200, scale=40, size=N),
+    100, 350
+).round(1)
+
+# ─────────────────────────────────────────────────────────────
+# SEÇÃO 4 — REGRA DE RISCO CLÍNICO (variável-alvo)
+#
+# Cada variável contribui com pontos conforme a faixa clínica:
+#
+#   Variável          | Faixa          | Pontos
+#   ──────────────────|────────────────|───────
+#   Glicose           | ≥ 126          | +2
+#                     | 100–125        | +1
+#   Pressão arterial  | ≥ 140          | +2
+#                     | 120–139        | +1
+#   IMC               | ≥ 30           | +2
+#                     | 25–29.9        | +1
+#   Colesterol        | ≥ 240          | +2
+#                     | 200–239        | +1
+#   Idade             | ≥ 60           | +2
+#                     | 45–59          | +1
+#
+#   Score total   → Risco
+#   ─────────────────────
+#   0 – 2         → 0 (baixo)
+#   3 – 5         → 1 (médio)
+#   ≥ 6           → 2 (alto)
+# ─────────────────────────────────────────────────────────────
+def calcular_score(g, pa, bmi, col, age):
+    """Calcula score de risco somando pontos por faixa clínica."""
+    score = np.zeros(len(g), dtype=int)
+
+    # Contribuição da glicose
+    score += np.where(g >= 126, 2, np.where(g >= 100, 1, 0))
+    # Contribuição da pressão arterial
+    score += np.where(pa >= 140, 2, np.where(pa >= 120, 1, 0))
+    # Contribuição do IMC
+    score += np.where(bmi >= 30, 2, np.where(bmi >= 25, 1, 0))
+    # Contribuição do colesterol
+    score += np.where(col >= 240, 2, np.where(col >= 200, 1, 0))
+    # Contribuição da idade
+    score += np.where(age >= 60, 2, np.where(age >= 45, 1, 0))
+
+    return score
+
+score = calcular_score(glicose, pressao_arterial, imc, colesterol, idade)
+
+# Pequeno ruído aleatório em ~11% dos casos para simular
+# a imprecisão real de dados clínicos (evita fronteiras perfeitas)
+ruido = np.random.choice([0]*9 + [1, -1], size=N)
+score_final = np.clip(score + ruido, 0, 10)
+
+# Classificação final em 3 classes
+risco = np.where(score_final <= 2, 0,
+        np.where(score_final <= 5, 1, 2))
+
+# ─────────────────────────────────────────────────────────────
+# SEÇÃO 5 — MONTAR E SALVAR O DATASET
+# ─────────────────────────────────────────────────────────────
+df = pd.DataFrame({
+    "nome":             nomes,
+    "idade":            idade,
+    "glicose":          glicose,
+    "pressao_arterial": pressao_arterial,
+    "imc":              imc,
+    "colesterol":       colesterol,
+    "risco":            risco          # 0 = baixo | 1 = médio | 2 = alto
+})
+
+# Salva em CSV com encoding UTF-8 (suporta acentos no Excel)
+df.to_csv("pacientes.csv", index=False, encoding="utf-8-sig")
+
+# ─────────────────────────────────────────────────────────────
+# SEÇÃO 6 — RELATÓRIO DE VALIDAÇÃO
+# ─────────────────────────────────────────────────────────────
+print("=" * 58)
+print("   DATASET GERADO COM SUCESSO → pacientes.csv")
+print("=" * 58)
+print(f"\n  Total de registros : {len(df)}")
+print(f"  Colunas            : {list(df.columns)}\n")
+
+print("  Distribuição da variável-alvo (risco):")
+dist   = df["risco"].value_counts().sort_index()
+labels = {0: "Baixo risco", 1: "Risco médio", 2: "Risco alto"}
+for k, v in dist.items():
+    barra = "█" * int(v / 20)
+    print(f"    {k} — {labels[k]:<12}: {v:>5} ({v/N*100:.1f}%)  {barra}")
+
+print("\n  Estatísticas descritivas:")
+print(df[["idade","glicose","pressao_arterial","imc","colesterol"]]
+      .describe().round(1).to_string())
+print("\n" + "=" * 58)
+
+
+============================================================
+#CODIGO 3 (TESTES)
+
+# ============================================================
+#  TESTES FIXOS — 3 NOVOS PACIENTES
+#  Sistema de Predição de Risco Clínico
+#  Pronto para rodar no Google Colab (sem input manual)
+# ============================================================
+
+import pandas as pd
+import numpy as np
+import warnings
+warnings.filterwarnings("ignore")
+
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
+from sklearn.ensemble import RandomForestClassifier
+
+# ─────────────────────────────────────────────────────────────
+# PASSO 1 — Gerar o dataset internamente (sem depender de CSV)
+# ─────────────────────────────────────────────────────────────
+np.random.seed(42)
+N = 2000
+
+nomes_lista = [
+    "Lucas","Gabriel","Mateus","Pedro","Rafael","Bruno","Caio","Diego",
+    "Eduardo","Felipe","Ana","Beatriz","Camila","Diana","Fernanda",
+    "Gabriela","Helena","Isabela","Juliana","Karina","Larissa","Mariana",
+    "Natália","Olivia","Patrícia","Roberta","Sabrina","Tatiana","Vanessa","Alice"
+]
+nomes       = np.random.choice(nomes_lista, size=N)
+idade       = np.random.randint(18, 100, size=N)
+glicose     = np.clip(np.random.normal(100, 30, N), 60, 300).round(1)
+pressao     = np.clip(np.random.normal(120, 20, N), 80, 220).round(1)
+imc         = np.clip(np.random.normal(26,   5, N), 15,  50).round(1)
+colesterol  = np.clip(np.random.normal(200, 40, N), 100, 350).round(1)
+
+def calcular_score(g, pa, bmi, col, age):
+    s = np.zeros(N, dtype=int)
+    s += np.where(g   >= 126, 2, np.where(g   >= 100, 1, 0))
+    s += np.where(pa  >= 140, 2, np.where(pa  >= 120, 1, 0))
+    s += np.where(bmi >= 30,  2, np.where(bmi >= 25,  1, 0))
+    s += np.where(col >= 240, 2, np.where(col >= 200, 1, 0))
+    s += np.where(age >= 60,  2, np.where(age >= 45,  1, 0))
+    return s
+
+score = calcular_score(glicose, pressao, imc, colesterol, idade)
+ruido = np.random.choice([0]*9 + [1, -1], size=N)
+risco = np.where(np.clip(score + ruido, 0, 10) <= 2, 0,
+        np.where(np.clip(score + ruido, 0, 10) <= 5, 1, 2))
+
+df = pd.DataFrame({
+    "nome": nomes, "idade": idade, "glicose": glicose,
+    "pressao_arterial": pressao, "imc": imc,
+    "colesterol": colesterol, "risco": risco
+})
+
+# ─────────────────────────────────────────────────────────────
+# PASSO 2 — Treinar o modelo
+# ─────────────────────────────────────────────────────────────
+X = df[["idade","glicose","pressao_arterial","imc","colesterol"]]
+y = df["risco"]
+
+X_train, _, y_train, _ = train_test_split(
+    X, y, test_size=0.2, stratify=y, random_state=42
+)
+
+scaler = StandardScaler()
+X_train_scaled = scaler.fit_transform(X_train)
+
+modelo = RandomForestClassifier(n_estimators=100, random_state=42)
+modelo.fit(X_train_scaled, y_train)
+
+print("✅ Modelo treinado com sucesso.\n")
+
+# ─────────────────────────────────────────────────────────────
+# PASSO 3 — DEFINIÇÃO DOS 3 NOVOS PACIENTES DE TESTE
+#
+#  Teste A — Fernanda, 22 anos: jovem, perfil completamente saudável
+#  Teste B — Antônio, 55 anos: perfil intermediário, zona de atenção
+#  Teste C — Sônia,   78 anos: idosa com múltiplas comorbidades graves
+# ─────────────────────────────────────────────────────────────
+pacientes_teste = [
+    {
+        "nome"            : "Fernanda",
+        "idade"           : 22,
+        "glicose"         : 82.0,    # normal (70–99)
+        "pressao_arterial": 108.0,   # normal (< 120)
+        "imc"             : 21.3,    # peso ideal (18.5–24.9)
+        "colesterol"      : 172.0    # desejável (< 200)
+    },
+    {
+        "nome"            : "Antônio",
+        "idade"           : 55,
+        "glicose"         : 118.0,   # pré-diabetes (100–125)
+        "pressao_arterial": 134.0,   # pré-hipertensão (120–139)
+        "imc"             : 28.4,    # sobrepeso (25–29.9)
+        "colesterol"      : 222.0    # limítrofe (200–239)
+    },
+    {
+        "nome"            : "Sônia",
+        "idade"           : 78,
+        "glicose"         : 187.0,   # diabetes (≥ 126)
+        "pressao_arterial": 168.0,   # hipertensão estágio 2 (≥ 140)
+        "imc"             : 35.8,    # obesidade grau II (≥ 35)
+        "colesterol"      : 291.0    # muito alto (≥ 240)
+    }
+]
+
+# ─────────────────────────────────────────────────────────────
+# PASSO 4 — FUNÇÃO DE EXIBIÇÃO DO RESULTADO
+# ─────────────────────────────────────────────────────────────
+def avaliar_paciente(p, numero):
+    entrada = pd.DataFrame([{
+        "idade"           : p["idade"],
+        "glicose"         : p["glicose"],
+        "pressao_arterial": p["pressao_arterial"],
+        "imc"             : p["imc"],
+        "colesterol"      : p["colesterol"]
+    }])
+
+    entrada_norm   = scaler.transform(entrada)
+    classe         = modelo.predict(entrada_norm)[0]
+    probabilidades = modelo.predict_proba(entrada_norm)[0]
+
+    labels = {
+        0: ("BAIXO RISCO", "✅"),
+        1: ("RISCO MÉDIO",  "⚠️ "),
+        2: ("RISCO ALTO",   "🔴")
+    }
+    interpretacoes = {
+        0: "Perfil saudável. Manter hábitos e checkups anuais.",
+        1: "Indicadores limítrofes. Avaliação médica preventiva recomendada.",
+        2: "Múltiplos fatores de risco. Encaminhamento médico imediato."
+    }
+
+    nome_classe, icone = labels[classe]
+
+    print(f"{'━'*54}")
+    print(f"  TESTE {numero} — {p['nome'].upper()}")
+    print(f"{'━'*54}")
+    print(f"  Idade          : {p['idade']} anos")
+    print(f"  Glicose        : {p['glicose']:.1f} mg/dL")
+    print(f"  Pressão art.   : {p['pressao_arterial']:.1f} mmHg")
+    print(f"  IMC            : {p['imc']:.1f} kg/m²")
+    print(f"  Colesterol     : {p['colesterol']:.1f} mg/dL")
+    print(f"  {'─'*50}")
+
+    print("  Probabilidades:")
+    nomes_cls = ["Baixo risco", "Risco médio", "Risco alto"]
+    for i, (prob, lbl) in enumerate(zip(probabilidades, nomes_cls)):
+        blocos  = int(prob * 28)
+        barra   = "█" * blocos + "░" * (28 - blocos)
+        seta    = " ◄ previsto" if i == classe else ""
+        print(f"    {lbl:<13}: {barra}  {prob*100:5.1f}%{seta}")
+
+    # Fatores de risco
+    fatores = []
+    if p["glicose"]         >= 126: fatores.append(f"glicose elevada ({p['glicose']} mg/dL)")
+    elif p["glicose"]       >= 100: fatores.append(f"pré-diabetes ({p['glicose']} mg/dL)")
+    if p["pressao_arterial"]>= 140: fatores.append(f"hipertensão ({p['pressao_arterial']} mmHg)")
+    elif p["pressao_arterial"]>=120: fatores.append(f"pré-hipertensão ({p['pressao_arterial']} mmHg)")
+    if p["imc"]             >= 30:  fatores.append(f"obesidade (IMC {p['imc']})")
+    elif p["imc"]           >= 25:  fatores.append(f"sobrepeso (IMC {p['imc']})")
+    if p["colesterol"]      >= 240: fatores.append(f"colesterol alto ({p['colesterol']} mg/dL)")
+    elif p["colesterol"]    >= 200: fatores.append(f"colesterol limítrofe ({p['colesterol']} mg/dL)")
+    if p["idade"]           >= 60:  fatores.append(f"idade ≥ 60 anos ({p['idade']} anos)")
+
+    print(f"\n  ► Diagnóstico  : {icone}  {nome_classe}")
+    print(f"  ► Interpretação: {interpretacoes[classe]}")
+    if fatores:
+        print(f"  ► Fatores      : {', '.join(fatores)}")
+    else:
+        print("  ► Fatores      : nenhum fator de risco identificado")
+    print()
+
+    return (p["nome"], classe, nome_classe, icone)
+
+# ─────────────────────────────────────────────────────────────
+# PASSO 5 — EXECUTAR OS 3 TESTES
+# ─────────────────────────────────────────────────────────────
+print("=" * 54)
+print("  SISTEMA DE PREDIÇÃO DE RISCO CLÍNICO")
+print("  3 Novos Testes — Google Colab")
+print("=" * 54 + "\n")
+
+resumo = []
+for i, paciente in enumerate(pacientes_teste, start=1):
+    resultado = avaliar_paciente(paciente, i)
+    resumo.append(resultado)
+
+# ─────────────────────────────────────────────────────────────
+# PASSO 6 — RESUMO FINAL
+# ─────────────────────────────────────────────────────────────
+print("=" * 54)
+print("  RESUMO FINAL DOS 3 TESTES")
+print("=" * 54)
+for idx, (nome, _, nome_cls, icone) in enumerate(resumo, 1):
+    print(f"  {idx}. {nome:<12}  {icone}  {nome_cls}")
+print("=" * 54)
+print("  Modelo : Random Forest (100 árvores)")
+print("  Dados  : 2.000 registros sintéticos")
+print("  Aviso  : uso acadêmico — não substitui diagnóstico médico.")
+print("=" * 54)
